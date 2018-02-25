@@ -282,7 +282,7 @@ class MultiResFusionBlock(nn.Module) :
 			out.append( self.paths[i](x[i]) )
 			
 		output = out[self.nbr_paths-1]
-		for i in range(self.nbr_paths-1) :
+		for i in range(self.nbr_paths-1) :	
 			output += out[i]
 
 		return output
@@ -523,12 +523,13 @@ def test_refinenet() :
 	img_dim = 512
 	conv_dim = 64
 	use_cuda=True
+	batch_size = 8
 	semantic_labels_nbr = 32
 	refinenet = ResNet34RefineNet1(img_dim_in=img_dim,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr)
 	#print(refinenet)
 	#print(refinenet.refinenet.MultiResFusion)
 
-	inputs = Variable(torch.rand((1,3,img_dim,img_dim))).cuda()
+	inputs = Variable(torch.rand((batch_size,3,img_dim,img_dim))).cuda()
 	outputs = refinenet(inputs)
 	print(outputs.size())
 
