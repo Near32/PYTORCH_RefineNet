@@ -43,9 +43,9 @@ def conv( sin, sout,k,stride=2,pad=1,batchNorm=True,bias=True) :
 		layers.append( nn.BatchNorm2d( sout) )
 	return nn.Sequential( *layers )
 
-def deconv( sin, sout,k,stride=2,pad=1,batchNorm=True,bias=True) :
+def deconv( sin, sout,k,stride=2,pad=1,dilation=1,batchNorm=True,bias=True) :
 	layers = []
-	layers.append( nn.ConvTranspose2d( sin,sout, k, stride,pad,bias=bias) )
+	layers.append( nn.ConvTranspose2d( sin,sout, k, stride,pad,dilation=dilation,bias=bias) )
 	if batchNorm :
 		layers.append( nn.BatchNorm2d( sout) )
 	return nn.Sequential( *layers )
@@ -158,13 +158,13 @@ class Encoder(nn.Module) :
 
 
 class ResNetBlock(nn.Module) :
-	def __init__(self, img_dim=128, img_depth=512, conv_dim=256 ) :
+	def __init__(self, img_dim=128, img_depth=512, conv_dim=256,use_cuda=True ) :
 		super(ResNetBlock,self).__init__()
 		
 		self.img_depth=img_depth
 		self.img_dim = img_dim
 		self.conv_dim = conv_dim
-
+		self.use_cuda = use_cuda
 		
 		self.cvs = []
 		
@@ -188,6 +188,9 @@ class ResNetBlock(nn.Module) :
 		else :
 			self.downsampling = None
 
+		if self.use_cuda :
+			self = self.cuda()
+
 	def forward(self, x) :
 		out = self.cvs(x)
 
@@ -205,15 +208,16 @@ class ResNetBlock(nn.Module) :
 
 
 class MultiResFusionBlock(nn.Module) :
-	def __init__(self, img_dim=[512,256,128], img_depth=[64,128,256] ) :
+	def __init__(self, img_dim=[512,256,128,64], img_depth=256, use_cuda=True ) :
 		super(MultiResFusionBlock,self).__init__()
 		
 		self.img_depth=img_depth
-		
+		self.use_cuda = use_cuda
+
 		self.img_dim = img_dim
 		self.nbr_paths = len(self.img_dim)
 		
-		self.min_depth = min(self.img_depth)
+		self.min_dim = min(self.img_dim)
 		self.max_dim = max(self.img_dim)
 		
 		self.paths = []
@@ -221,9 +225,9 @@ class MultiResFusionBlock(nn.Module) :
 			path = []
 			
 			# 3x3Conv :
-			ind = self.img_depth[i]
-			outd = self.min_depth
-			outdim = self.img_dim[i]
+			ind = self.img_depth
+			outd = self.img_depth
+			outdim = self.min_dim
 			indim = self.img_dim[i]
 			pad = 0
 			stride = 1
@@ -235,10 +239,10 @@ class MultiResFusionBlock(nn.Module) :
 
 
 			# Upsampling :
-			ind = self.min_depth
-			outd = self.min_depth
+			ind = self.img_depth
+			outd = self.img_depth
 			outdim = self.max_dim
-			indim = self.img_dim[i]
+			indim = self.min_dim
 			pad = 0
 			stride = 1
 			k = floor( outdim + 2*pad - stride*(indim-1) )
@@ -248,7 +252,12 @@ class MultiResFusionBlock(nn.Module) :
 
 			path = nn.Sequential( *path) 
 			
+			if self.use_cuda :
+				path = path.cuda()
+
 			self.paths.append(path)
+
+		
 
 	def __str__(self) :
 		outstr = ''
@@ -257,28 +266,21 @@ class MultiResFusionBlock(nn.Module) :
 			outstr += '\n\r'
 		return outstr
 
+
 	def forward(self, x) :
 		assert(len(x) == self.nbr_paths)
 		
-		for i in range(self.nbr_paths) :
-			print(x[i].size())
+		#for i in range(self.nbr_paths) :
+		#	print(x[i].size())
 
-		for i in range(self.nbr_paths) :
-			print(self.paths[i])
+		#for i in range(self.nbr_paths) :
+		#	print(self.paths[i])
 
-		raise 
-		
+
 		out = []
 		for i in range(self.nbr_paths) :
-			try :
-				out.append( self.paths[i](x[i]) )
-			except Exception as e :
-				print( ' i = {}'.format(i) )
-				print(self.img_depth)
-				print(self.paths[i])
-				print(x[i].size())
-				raise e
-
+			out.append( self.paths[i](x[i]) )
+			
 		output = out[self.nbr_paths-1]
 		for i in range(self.nbr_paths-1) :
 			output += out[i]
@@ -287,76 +289,102 @@ class MultiResFusionBlock(nn.Module) :
 
 
 class ChainedResPoolBlock(nn.Module) :
-	def __init__(self, img_dim=128, img_depth=512) :
+	def __init__(self, img_dim=128, img_depth=512, semantic_labels_nbr=10, use_cuda=True) :
 		super(ChainedResPoolBlock,self).__init__()
 		
 		self.img_depth=img_depth
 		self.img_dim = img_dim
+		self.use_cuda = use_cuda
+		self.semantic_labels_nbr = semantic_labels_nbr
 		
 		
-		stride = 1
-		pad = 0
-
 		self.relu1 = nn.LeakyReLU(0.05) 
 		
 		# MaxPool :
+		stride = 1
+		pad = 1
 		self.pool1 = nn.MaxPool2d(kernel_size=5,stride=stride,padding=pad)
+		
 		# 3x3Conv :
 		ind = self.img_depth
 		outd = self.img_depth
 		outdim = self.img_dim
-		indim = (self.img_dim - 5 + 1)/1 +1
+		indim = (self.img_dim +2*pad - 5 + 1)/1 +1
 		pad = 0
 		stride = 1
-		k = indim-(outdim-1)*stride-2*pad
-		k=3
-		self.cv1 =  conv( ind, outd, k, stride=stride, pad=pad, batchNorm=False, bias=False)
-		
+		dilation=2
+		#k = indim-(outdim-1)*stride-2*pad
+		k = floor( outdim + 2*pad - stride*(indim-1) )
+		#print('CHAINED RES : indim1 : {}'.format(indim) )
+		#print('CHAINED RES : k1 : {}'.format(k) )
+		#k=3
+		self.cv1 =  deconv( ind, outd, k, stride=stride, pad=pad, dilation=dilation,batchNorm=False,bias=False)
+					  
 		# MaxPool :
+		stride = 1
+		pad = 1
 		self.pool2 = nn.MaxPool2d(kernel_size=5,stride=stride,padding=pad)
+		
 		# 3x3Conv :
 		ind = self.img_depth
 		outd = self.img_depth
 		outdim = self.img_dim
-		indim = (self.img_dim - 5 + 1)/1 +1
+		indim = (indim + 2*pad - 5 + 1)/1 +1
 		pad = 0
 		stride = 1
-		k = indim-(outdim-1)*stride-2*pad
-		k=3
-		self.cv2 =  conv( ind, outd, k, stride=stride, pad=pad, batchNorm=False)
-		
+		dilation = 2
+		#k = indim-(outdim-1)*stride-2*pad
+		k = floor( outdim + 2*pad - stride*(indim-1) )
+		#print('CHAINED RES : indim2 : {}'.format(indim) )
+		#print('CHAINED RES : k2 : {}'.format(k) )
+		#k=3
+		self.cv2 =  deconv( ind, outd, k, stride=stride, pad=pad, dilation=dilation, batchNorm=False,bias=False)
+					
 		# MaxPool :
+		stride = 1
+		pad = 1
 		self.pool3 = nn.MaxPool2d(kernel_size=5,stride=stride,padding=pad)
+		
 		# 3x3Conv :
 		ind = self.img_depth
 		outd = self.img_depth
 		outdim = self.img_dim
-		indim = (self.img_dim - 5 + 1)/1 +1
+		indim = (indim + 2*pad - 5 + 1)/1 +1
 		pad = 0
 		stride = 1
-		k = indim-(outdim-1)*stride-2*pad
-		k=3
-		self.cv3 =  conv( ind, outd, k, stride=stride, pad=pad, batchNorm=False)
-		
+		dilation = 2
+		#k = indim-(outdim-1)*stride-2*pad
+		k = floor( outdim + 2*pad - stride*(indim-1) )
+		#print('CHAINED RES : indim3 : {}'.format(indim) )
+		#print('CHAINED RES : k3 : {}'.format(k) )
+		#k=3
+		self.cv3 =  deconv( ind, outd, k, stride=stride, pad=pad, dilation=dilation, batchNorm=False,bias=False)
+
+		#self.adaptation_cv = deconv( outd, self.semantic_labels_nbr, 1, stride=1,pad=0, batchNorm=False,bias=False)
+					
+		if self.use_cuda :
+			self = self.cuda()
 
 	def forward(self, x) :
 		outsum = x
 		out = self.relu1(x)
 		
-		out = self.pool1(out)
-		out = self.cv2(out)
+		out_pool1 = self.pool1(out)
+		out = self.cv1(out_pool1)
 
 		outsum += out
 
-		out = self.pool2(out)
-		out = self.cv2(out)
+		out_pool2 = self.pool2(out_pool1)
+		out = self.cv2(out_pool2)
 
 		outsum += out
 
-		out = self.pool3(out)
-		out = self.cv3(out)
+		out_pool3 = self.pool3(out_pool2)
+		out = self.cv3(out_pool3)
 
 		outsum += out
+
+		#outsum = self.adaptation_cv(outsum)
 
 		return outsum
 
@@ -407,11 +435,13 @@ class ModelResNet34(models.ResNet) :
 
 
 class RefineNetBlock(nn.Module) :
-	def __init__(self, img_dim_in=512, img_depths=[64,128,256,512], conv_dim=256) :
+	def __init__(self, img_dim_in=512, img_depths=[64,128,256,512], conv_dim=256, use_cuda=True, semantic_labels_nbr=10) :
 		super(RefineNetBlock,self).__init__()
 		self.img_dim_in = img_dim_in
 		self.img_depths = img_depths
 		self.conv_dim = conv_dim
+		self.use_cuda = use_cuda
+		self.semantic_labels_nbr = semantic_labels_nbr
 
 		self.nbr_paths = len(self.img_depths)
 		self.RCUpaths = []
@@ -421,17 +451,20 @@ class RefineNetBlock(nn.Module) :
 			self.img_dims.append( int(self.img_dims[-1]/2) )
 
 		for i in range(self.nbr_paths) :
-			self.RCUpaths.append( ResNetBlock(img_dim=self.img_dims[i], img_depth=self.img_depths[i], conv_dim=self.conv_dim) )
-
+			self.RCUpaths.append( ResNetBlock(img_dim=self.img_dims[i], img_depth=self.img_depths[i], conv_dim=self.conv_dim,use_cuda=self.use_cuda) )
 		print('Creation of the RCUs : OK.')
-		self.MultiResFusion = MultiResFusionBlock(img_dim=self.img_dims, img_depth=self.img_depths )
 		
+
+		# Multi resolution Fusion Block :
+		#print('INPUT MULTI RES : {}'.format(self.img_dims) )
+		self.MultiResFusion = MultiResFusionBlock(img_dim=self.img_dims, img_depth=self.conv_dim,use_cuda=self.use_cuda )
 		print('Creation of the Multi-Resolution Fusion Block : OK.')
 
-		self.ChainedResPool = ChainedResPoolBlock( img_dim=self.img_dims[0], img_depth=self.conv_dim)
+		self.ChainedResPool = ChainedResPoolBlock( img_dim=self.img_dims[0], img_depth=self.conv_dim, semantic_labels_nbr=self.semantic_labels_nbr,use_cuda=self.use_cuda)
+		print('Creation of the Chained Residual Pooling Block : OK.')
 
-		print('Creation of the Chianed Residual Pooling Block : OK.')
-
+		self.finalRCU =  ResNetBlock(img_dim=self.img_dims[0], img_depth=self.conv_dim, conv_dim=self.semantic_labels_nbr,use_cuda=self.use_cuda) 
+		
 	def forward(self,x) :
 		assert(len(x)==self.nbr_paths)
 
@@ -439,7 +472,9 @@ class RefineNetBlock(nn.Module) :
 		
 		# RCUs :
 		for i in range(len(x)) :
+			#print('IN : RCU {} : {}'.format(i, x[i].size() ))
 			out.append( self.RCUpaths[i](x[i]) )
+			#print('OUT : RCU {} : {}'.format(i, out[i].size() ))
 
 		# Multi Resolution Fusion :
 		out = self.MultiResFusion(out)
@@ -447,24 +482,37 @@ class RefineNetBlock(nn.Module) :
 		# Chained Residual Pooling :
 		out = self.ChainedResPool(out)
 
+		# Final Adaptation RCU :
+		out = self.finalRCU(out)
+
 		return out
 
 
 class ResNet34RefineNet1(nn.Module) :
-	def __init__(self, img_dim_in=128, img_depths=[64,128,256,512], conv_dim=256) :
+	def __init__(self, img_dim_in=512, img_depths=[64,128,256,512], conv_dim=256,use_cuda=True, semantic_labels_nbr=10) :
 		super(ResNet34RefineNet1,self).__init__()
 		self.img_dim_in = img_dim_in
 		self.nbr_paths = len(img_depths)
 		self.img_depths = img_depths
 		self.conv_dim = conv_dim
+		self.use_cuda = use_cuda
+		self.semantic_labels_nbr = semantic_labels_nbr
 
-		self.resnet = ModelResNet34()
-		self.refinenet = RefineNetBlock(img_dim_in=self.img_dim_in, img_depths=self.img_depths,conv_dim=self.conv_dim)
+		if self.use_cuda :
+			self.resnet = ModelResNet34().cuda()
+		else :
+			self.resnet = ModelResNet34()
+		
+		self.refinenet = RefineNetBlock(img_dim_in=self.img_dim_in, img_depths=self.img_depths,conv_dim=self.conv_dim,use_cuda=self.cuda, semantic_labels_nbr=self.semantic_labels_nbr )
 
 	def forward(self,x) :
 		self.resnet_out = self.resnet(x)
 
 		self.inputs = [self.resnet.x1,self.resnet.x2,self.resnet.x3,self.resnet.x4]
+
+		#print('RESNET OUTPUTS : ')
+		#for el in self.inputs :
+		#	print(' size : {}'.format( el.size() ) )
 
 		self.refinenet_out = self.refinenet(self.inputs)
 
@@ -473,11 +521,14 @@ class ResNet34RefineNet1(nn.Module) :
 
 def test_refinenet() :
 	img_dim = 512
-	refinenet = ResNet34RefineNet1(img_dim_in=img_dim)
-	print(refinenet)
-	print(refinenet.refinenet.MultiResFusion)
+	conv_dim = 64
+	use_cuda=True
+	semantic_labels_nbr = 32
+	refinenet = ResNet34RefineNet1(img_dim_in=img_dim,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr)
+	#print(refinenet)
+	#print(refinenet.refinenet.MultiResFusion)
 
-	inputs = Variable(torch.rand((1,3,img_dim,img_dim)))
+	inputs = Variable(torch.rand((1,3,img_dim,img_dim))).cuda()
 	outputs = refinenet(inputs)
 	print(outputs.size())
 
