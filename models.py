@@ -487,6 +487,9 @@ class RefineNetBlock(nn.Module) :
 		# Final Adaptation RCU :
 		out = self.finalRCU(out)
 
+		# log softmax :
+		out = F.log_softmax(out)
+		
 		return out
 
 

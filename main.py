@@ -42,7 +42,7 @@ def setting(args) :
 	conv_dim = args.conv_dim
 	global use_cuda
 	batch_size = 8
-	semantic_labels_nbr = 1
+	semantic_labels_nbr = 150
 	#refinenet = ResNet34RefineNet1(img_dim_in=img_dim, img_depth_in=img_depth, img_depths=img_depths,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr)
 	refinenet = ResNet34RefineNet1(img_dim_in=img_dim, img_depth_in=img_depth,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr)
 	frompath = True
@@ -73,13 +73,37 @@ def setting(args) :
 		train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=args.epoch,batch_size=args.batch,offset=args.offset)
 	
 
+def visualize_reconst_label(reconst,semantic_labels_nbr=150) :
+	batch_size = reconst.size()[0]
+	nbr_labels = reconst.size()[1]
+	imgs = []
+	for i in range(batch_size) :
+		img =  reconst[i].float()
+		img = (img-img.mean())/img.std()
+		labels = img * 255.0
+		imgs.append(labels.unsqueeze(0) )
+	imgs = torch.cat(imgs, dim=1)
+	return imgs
 
+def visualize_reconst(reconst,semantic_labels_nbr=150) :
+	batch_size = reconst.size()[0]
+	nbr_labels = reconst.size()[1]
+	dim = reconst.size()[2]
+	imgs = []
+	for i in range(batch_size) :
+		img =  reconst[i]
+		img = img.max(0)[1].float().view((1,dim,dim))
+		img = (img-img.mean())/img.std()
+		labels = img * 255.0
+		imgs.append(labels.unsqueeze(0) )
+	imgs = torch.cat(imgs, dim=2)
+	return imgs
 
 def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=100,batch_size=32, offset=0, stacking=False) :
 	global use_cuda
 	
 	img_depth=refinenet.img_depth
-	pred_depth = 1
+	pred_depth = refinenet.semantic_labels_nbr
 	pred_dim = args.segSize
 	img_dim = refinenet.img_dim_in
 
@@ -89,9 +113,12 @@ def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=
 	# Debug :
 	sample = next(data_iter)
 	fixed_x = sample['image']
-	
 	fixed_x = fixed_x.view( (-1, img_depth, img_dim, img_dim) )
+	fixed_seg = sample['label'].view( (-1, 1, pred_dim, pred_dim) )
+	fixed_seg_norm = visualize_reconst_label(fixed_seg)
+	
 	torchvision.utils.save_image(fixed_x.cpu(), './data/{}/real_images.png'.format(path))
+	torchvision.utils.save_image(fixed_seg_norm, './data/{}/real_seg.png'.format(path))
 	fixed_x = Variable(fixed_x.view(fixed_x.size(0), img_depth, img_dim, img_dim)).float()
 	if use_cuda :
 		fixed_x = fixed_x.cuda()
@@ -108,13 +135,12 @@ def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=
 			
 			# Save the reconstructed images
 			if i % 100 == 0 :
-				'''
-				reconst_images = refinenet(fixed_x)
-				reconst_images = reconst_images.view(-1, img_depth, pred_dim, pred_dim).cpu().data
-				#orimg = fixed_x.cpu().data.view(-1, img_depth, img_dim, img_dim)
-				#ri = torch.cat( [orimg, reconst_images], dim=2)
-				torchvision.utils.save_image(reconst_images,'./data/{}/reconst_images/{}.png'.format(path,(epoch+offset+1) ) )
-				'''
+				reconst_images = refinenet(fixed_x).cpu().data
+				reconst_images = visualize_reconst(reconst_images)
+				reconst_images = reconst_images.view(-1, 1, pred_dim, pred_dim)
+				orimg = fixed_seg_norm.view(-1, 1, pred_dim, pred_dim)
+				ri = torch.cat( [orimg, reconst_images], dim=2)
+				torchvision.utils.save_image(ri,'./data/{}/reconst_images/{}.png'.format(path,(epoch+offset+1) ) )
 				model_wts = refinenet.state_dict()
 				torch.save( model_wts, os.path.join(SAVE_PATH,'temp.weights') )
 				print('Model saved at : {}'.format(os.path.join(SAVE_PATH,'temp.weights')) )
