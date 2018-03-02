@@ -201,9 +201,9 @@ class ResNetBlock(nn.Module) :
 			residual = x
 
 		# SUM :
-		out += residual
+		output = out + residual
 
-		return out
+		return output
 
 
 
@@ -366,13 +366,12 @@ class ChainedResPoolBlock(nn.Module) :
 			self = self.cuda()
 
 	def forward(self, x) :
-		outsum = x
 		out = self.relu1(x)
 		
 		out_pool1 = self.pool1(out)
 		out = self.cv1(out_pool1)
 
-		outsum += out
+		outsum = x + out
 
 		out_pool2 = self.pool2(out_pool1)
 		out = self.cv2(out_pool2)
@@ -441,7 +440,10 @@ class RefineNetBlock(nn.Module) :
 		self.img_depths = img_depths
 		self.conv_dim = conv_dim
 		self.use_cuda = use_cuda
+
 		self.semantic_labels_nbr = semantic_labels_nbr
+		if self.semantic_labels_nbr is None :
+			self.semantic_labels_nbr = 3
 
 		self.nbr_paths = len(self.img_depths)
 		self.RCUpaths = []
@@ -489,11 +491,12 @@ class RefineNetBlock(nn.Module) :
 
 
 class ResNet34RefineNet1(nn.Module) :
-	def __init__(self, img_dim_in=512, img_depths=[64,128,256,512], conv_dim=256,use_cuda=True, semantic_labels_nbr=10) :
+	def __init__(self, img_dim_in=512, img_depth_in=3, img_depths=[64,128,256,512], conv_dim=256,use_cuda=True, semantic_labels_nbr=10) :
 		super(ResNet34RefineNet1,self).__init__()
 		self.img_dim_in = img_dim_in
 		self.nbr_paths = len(img_depths)
 		self.img_depths = img_depths
+		self.img_depth = img_depth_in
 		self.conv_dim = conv_dim
 		self.use_cuda = use_cuda
 		self.semantic_labels_nbr = semantic_labels_nbr
@@ -520,17 +523,22 @@ class ResNet34RefineNet1(nn.Module) :
 		
 
 def test_refinenet() :
+	import time
+
 	img_dim = 512
 	conv_dim = 64
 	use_cuda=True
 	batch_size = 8
-	semantic_labels_nbr = 32
+	semantic_labels_nbr = 8
 	refinenet = ResNet34RefineNet1(img_dim_in=img_dim,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr)
 	#print(refinenet)
 	#print(refinenet.refinenet.MultiResFusion)
 
 	inputs = Variable(torch.rand((batch_size,3,img_dim,img_dim))).cuda()
+	t =time.time()
 	outputs = refinenet(inputs)
+	elt = time.time()-t
+	print('ELT : {} sec.'.format(elt))
 	print(outputs.size())
 
 
