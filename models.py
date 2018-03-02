@@ -489,7 +489,7 @@ class RefineNetBlock(nn.Module) :
 
 		# log softmax :
 		out = F.log_softmax(out)
-		
+
 		return out
 
 
@@ -528,11 +528,11 @@ class ResNet34RefineNet1(nn.Module) :
 def test_refinenet() :
 	import time
 
-	img_dim = 512
+	img_dim = 384
 	conv_dim = 64
 	use_cuda=True
-	batch_size = 8
-	semantic_labels_nbr = 8
+	batch_size = 2
+	semantic_labels_nbr = 150
 	refinenet = ResNet34RefineNet1(img_dim_in=img_dim,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr)
 	#print(refinenet)
 	#print(refinenet.refinenet.MultiResFusion)
@@ -543,6 +543,17 @@ def test_refinenet() :
 	elt = time.time()-t
 	print('ELT : {} sec.'.format(elt))
 	print(outputs.size())
+
+	elt = 0.0
+	nbr = 100
+	for i in range(nbr) :
+		t =time.time()
+		inputs = Variable(torch.rand((batch_size,3,img_dim,img_dim))).cuda()
+		outputs = refinenet(inputs)
+		elt += (time.time()-t)/nbr
+	
+	print('MEAN ELT : {} sec.'.format(elt))
+
 
 
 class betaVAE(nn.Module) :

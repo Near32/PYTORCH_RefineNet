@@ -82,7 +82,7 @@ def visualize_reconst_label(reconst,semantic_labels_nbr=150) :
 		img = (img-img.mean())/img.std()
 		labels = img * 255.0
 		imgs.append(labels.unsqueeze(0) )
-	imgs = torch.cat(imgs, dim=1)
+	imgs = torch.cat(imgs, dim=0)
 	return imgs
 
 def visualize_reconst(reconst,semantic_labels_nbr=150) :
@@ -116,7 +116,7 @@ def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=
 	fixed_x = fixed_x.view( (-1, img_depth, img_dim, img_dim) )
 	fixed_seg = sample['label'].view( (-1, 1, pred_dim, pred_dim) )
 	fixed_seg_norm = visualize_reconst_label(fixed_seg)
-	
+		
 	torchvision.utils.save_image(fixed_x.cpu(), './data/{}/real_images.png'.format(path))
 	torchvision.utils.save_image(fixed_seg_norm, './data/{}/real_seg.png'.format(path))
 	fixed_x = Variable(fixed_x.view(fixed_x.size(0), img_depth, img_dim, img_dim)).float()
@@ -209,8 +209,8 @@ if __name__ == '__main__' :
 	parser.add_argument('--list_val', type=str, default='./SceneParsing/ADE20K_object150_val.txt')
 	parser.add_argument('--root_img', type=str, default='./SceneParsing/images')
 	parser.add_argument('--root_seg', type=str, default='./SceneParsing/annotations')
-	parser.add_argument('--imgSize', default=512, type=int,help='input image size')
-	parser.add_argument('--segSize', default=128, type=int,help='output image size')
+	parser.add_argument('--imgSize', default=384, type=int,help='input image size')
+	parser.add_argument('--segSize', default=96, type=int,help='output image size')
 
 	args = parser.parse_args()
 	print(args)
