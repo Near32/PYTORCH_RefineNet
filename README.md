@@ -21,14 +21,10 @@ Here are some early results :
 
 Epoch | Samples  
 ------|------------
-15 | ![Dreconst1-1](/doc/dSprite/dSprite--beta4.0-layers3-z10-conv32/reconst_images/1.png) 
- ![Dgen1-1](/doc/dSprite/dSprite--beta4.0-layers3-z10-conv32/gen_images/1.png)
-25 | ![Dreconst1-10](/doc/dSprite/dSprite--beta4.0-layers3-z10-conv32/reconst_images/10.png) 
- ![Dgen1-10](/doc/dSprite/dSprite--beta4.0-layers3-z10-conv32/gen_images/10.png)
-45 | ![Dreconst1-30](/doc/dSprite/dSprite--beta4.0-layers3-z10-conv32/reconst_images/30.png) 
- ![Dgen1-30](/doc/dSprite/dSprite--beta4.0-layers3-z10-conv32/gen_images/30.png)
-65 | ![Dreconst1-50](/doc/dSprite/dSprite--beta4.0-layers3-z10-conv32/reconst_images/70.png) 
- ![Dgen1-50](/doc/dSprite/dSprite--beta4.0-layers3-z10-conv32/gen_images/70.png)
+15 | ![Dreconst1-1](/doc/SceneParsing//1-1.png)  ![Dgen1-1](/doc/SceneParsing//1-2.png)
+25 | ![Dreconst1-10](/doc/SceneParsing//2-1.png)  ![Dgen1-10](/doc/SceneParsing//2-2.png)
+45 | ![Dreconst1-30](/doc/SceneParsing//3-1.png)  ![Dgen1-30](/doc/SceneParsing//3-2.png)
+65 | ![Dreconst1-50](/doc/SceneParsing//4-1.png)  ![Dgen1-50](/doc/SceneParsing//4-2.png)
 
 ## References :
 
