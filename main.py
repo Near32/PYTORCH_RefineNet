@@ -46,14 +46,15 @@ def setting(args) :
 	global use_cuda
 	batch_size = 8
 	semantic_labels_nbr = 150
-	#refinenet = ResNet34RefineNet1(img_dim_in=img_dim, img_depth_in=img_depth, img_depths=img_depths,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr)
-	refinenet = ResNet34RefineNet1(img_dim_in=img_dim, img_depth_in=img_depth,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr)
+	refinenet = ResNet34RefineNet1(img_dim_in=img_dim, img_depth_in=img_depth,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr,use_batch_norm=args.use_batch_norm)
 	frompath = True
 	print(refinenet)
 		
 	# LOADING :
 	path = 'SceneParsing--img{}-lr{}-conv{}'.format(img_dim,lr,conv_dim)
-	
+	if args.use_batch_norm :
+		path += '-batch_norm'
+		
 	if not os.path.exists( './data/{}/'.format(path) ) :
 		os.mkdir('./data/{}/'.format(path))
 	if not os.path.exists( './data/{}/reconst_images/'.format(path) ) :
@@ -102,58 +103,15 @@ def visualize_reconst(reconst,semantic_labels_nbr=150) :
 	imgs = torch.cat(imgs, dim=2)
 	return imgs
 
-def unique(ar, return_index=False, return_inverse=False, return_counts=False):
-    ar = np.asanyarray(ar).flatten()
-
-    optional_indices = return_index or return_inverse
-    optional_returns = optional_indices or return_counts
-
-    if ar.size == 0:
-        if not optional_returns:
-            ret = ar
-        else:
-            ret = (ar,)
-            if return_index:
-                ret += (np.empty(0, np.bool),)
-            if return_inverse:
-                ret += (np.empty(0, np.bool),)
-            if return_counts:
-                ret += (np.empty(0, np.intp),)
-        return ret
-    if optional_indices:
-        perm = ar.argsort(kind='mergesort' if return_index else 'quicksort')
-        aux = ar[perm]
-    else:
-        ar.sort()
-        aux = ar
-    flag = np.concatenate(([True], aux[1:] != aux[:-1]))
-
-    if not optional_returns:
-        ret = aux[flag]
-    else:
-        ret = (aux[flag],)
-        if return_index:
-            ret += (perm[flag],)
-        if return_inverse:
-            iflag = np.cumsum(flag) - 1
-            inv_idx = np.empty(ar.shape, dtype=np.intp)
-            inv_idx[perm] = iflag
-            ret += (inv_idx,)
-        if return_counts:
-            idx = np.concatenate(np.nonzero(flag) + ([ar.size],))
-            ret += (np.diff(idx),)
-    return ret
-
 def colorEncode(labelmap, colors):
     labelmap = labelmap.astype('int')
-    labelmap_rgb = np.zeros((labelmap.shape[0], labelmap.shape[1], 3),
-                            dtype=np.uint8)
-    for label in unique(labelmap):
+    labelmap_set = set( labelmap.flatten() )
+    labelmap_rgb = np.zeros((labelmap.shape[0], labelmap.shape[1], 3),dtype=np.uint8)
+    for label in labelmap_set:
         if label < 0:
             continue
-        labelmap_rgb += (labelmap == label)[:, :, np.newaxis] * \
-            np.tile(colors[label],
-                    (labelmap.shape[0], labelmap.shape[1], 1))
+        labelmap_rgb += (labelmap == label)[:, :, np.newaxis] * np.tile(colors[label],(labelmap.shape[0], labelmap.shape[1], 1))
+    
     return labelmap_rgb
 
 def visualize(batch_data, pred, args,path,epoch=0):
@@ -163,35 +121,25 @@ def visualize(batch_data, pred, args,path,epoch=0):
     infos = batch_data['info']
 
     for j in range(len(infos)):
-        # get/recover image
-        # img = imread(os.path.join(args.root_img, infos[j]))
         img = imgs[j].clone()
-        for t, m, s in zip(img,
-                           [0.485, 0.456, 0.406],
-                           [0.229, 0.224, 0.225]):
-            t.mul_(s).add_(m)
+        for t,m,s in zip(img, [0.229, 0.224, 0.225], [0.485, 0.456, 0.406]) :
+        	t.mul_(m).add_(s)
         img = (img.numpy().transpose((1, 2, 0)) * 255).astype(np.uint8)
-        img = imresize(img, (args.imgSize, args.imgSize),
-                       interp='bilinear')
+        img = imresize(img, (args.imgSize, args.imgSize),interp='bilinear')
 
         # segmentation
         lab = segs[j].numpy()
         lab_color = colorEncode(lab, colors)
-        lab_color = imresize(lab_color, (args.imgSize, args.imgSize),
-                             interp='nearest')
+        lab_color = imresize(lab_color, (args.imgSize, args.imgSize),interp='nearest')
 
         # prediction
         pred_ = np.argmax(pred.data.cpu()[j].numpy(), axis=0)
         pred_color = colorEncode(pred_, colors)
-        pred_color = imresize(pred_color, (args.imgSize, args.imgSize),
-                              interp='nearest')
+        pred_color = imresize(pred_color, (args.imgSize, args.imgSize),interp='nearest')
 
         # aggregate images and save
-        im_vis = np.concatenate((img, lab_color, pred_color),
-                                axis=1).astype(np.uint8)
-        imsave(os.path.join( path,
-                            '{}-{}'.format(epoch,infos[j].replace('/', '_')
-                            .replace('.jpg', '.png')) ), im_vis)
+        im_vis = np.concatenate((img, lab_color, pred_color),axis=1).astype(np.uint8)
+        imsave(os.path.join( path,'{}-{}'.format(epoch,infos[j].replace('/', '_').replace('.jpg', '.png')) ), im_vis)
 
 
 def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=100,batch_size=32, offset=0, stacking=False) :
@@ -273,6 +221,9 @@ def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=
 			           "Reconst Loss: %.4f " 
 			           %(epoch+1, nbr_epoch, i+1, iter_per_epoch, total_loss.data[0], 
 			             reconst_loss.data[0]) )
+			    if best_loss is not None :
+			    	print("Epoch Loss : %.4f / Best : %.4f".format(epoch_loss, best_loss))
+
 
 		if best_loss is None :
 			#first validation : let us set the initialization but not save it :
@@ -303,6 +254,7 @@ if __name__ == '__main__' :
 	parser.add_argument('--lr', type=float, default=1e-4)
 	parser.add_argument('--conv_dim', type=int, default=64)
 	parser.add_argument('--data', type=str, default='ADE20K')
+	parser.add_argument('--use_batch_norm', action='store_true', default=False)
 	parser.add_argument('--list_train', type=str, default='./SceneParsing/ADE20K_object150_train.txt')
 	parser.add_argument('--list_val', type=str, default='./SceneParsing/ADE20K_object150_val.txt')
 	parser.add_argument('--root_img', type=str, default='./SceneParsing/images')

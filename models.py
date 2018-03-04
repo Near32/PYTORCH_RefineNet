@@ -158,13 +158,14 @@ class Encoder(nn.Module) :
 
 
 class ResNetBlock(nn.Module) :
-	def __init__(self, img_dim=128, img_depth=512, conv_dim=256,use_cuda=True ) :
+	def __init__(self, img_dim=128, img_depth=512, conv_dim=256,use_cuda=True,use_batch_norm=False ) :
 		super(ResNetBlock,self).__init__()
 		
 		self.img_depth=img_depth
 		self.img_dim = img_dim
 		self.conv_dim = conv_dim
 		self.use_cuda = use_cuda
+		self.use_batch_norm = use_batch_norm
 		
 		self.cvs = []
 		
@@ -172,10 +173,10 @@ class ResNetBlock(nn.Module) :
 		pad = 1
 
 		self.cvs.append( nn.LeakyReLU(0.05) )
-		self.cvs.append( conv( self.img_depth, self.conv_dim, 3,stride=stride,pad=pad, batchNorm=False,bias=False) )
+		self.cvs.append( conv( self.img_depth, self.conv_dim, 3,stride=stride,pad=pad, batchNorm=self.use_batch_norm,bias=False) )
 		
 		self.cvs.append( nn.LeakyReLU(0.05) )
-		self.cvs.append( conv(  self.conv_dim, self.conv_dim, 3,stride=stride,pad=pad, batchNorm=False,bias=False) )
+		self.cvs.append( conv(  self.conv_dim, self.conv_dim, 3,stride=stride,pad=pad, batchNorm=self.use_batch_norm,bias=False) )
 		
 		self.cvs = nn.Sequential( *self.cvs) 
 		
@@ -208,11 +209,12 @@ class ResNetBlock(nn.Module) :
 
 
 class MultiResFusionBlock(nn.Module) :
-	def __init__(self, img_dim=[512,256,128,64], img_depth=256, use_cuda=True ) :
+	def __init__(self, img_dim=[512,256,128,64], img_depth=256, use_cuda=True, use_batch_norm=False ) :
 		super(MultiResFusionBlock,self).__init__()
 		
 		self.img_depth=img_depth
 		self.use_cuda = use_cuda
+		self.use_batch_norm = use_batch_norm
 
 		self.img_dim = img_dim
 		self.nbr_paths = len(self.img_dim)
@@ -235,7 +237,7 @@ class MultiResFusionBlock(nn.Module) :
 			#outdim = (indim-k+2*pad)/stride +1
 			k = floor( indim-(outdim-1)*stride-2*pad )
 
-			path.append( conv( ind, outd, k, stride=stride, pad=pad, batchNorm=False,bias=False) )
+			path.append( conv( ind, outd, k, stride=stride, pad=pad, batchNorm=self.use_batch_norm,bias=False) )
 
 
 			# Upsampling :
@@ -247,7 +249,7 @@ class MultiResFusionBlock(nn.Module) :
 			stride = 1
 			k = floor( outdim + 2*pad - stride*(indim-1) )
 			
-			path.append( deconv( ind, outd, k, stride=stride, pad=pad, batchNorm=False,bias=False) )
+			path.append( deconv( ind, outd, k, stride=stride, pad=pad, batchNorm=self.use_batch_norm,bias=False) )
 
 
 			path = nn.Sequential( *path) 
@@ -289,12 +291,13 @@ class MultiResFusionBlock(nn.Module) :
 
 
 class ChainedResPoolBlock(nn.Module) :
-	def __init__(self, img_dim=128, img_depth=512, semantic_labels_nbr=10, use_cuda=True) :
+	def __init__(self, img_dim=128, img_depth=512, semantic_labels_nbr=10, use_cuda=True, use_batch_norm=False) :
 		super(ChainedResPoolBlock,self).__init__()
 		
 		self.img_depth=img_depth
 		self.img_dim = img_dim
 		self.use_cuda = use_cuda
+		self.use_batch_norm = use_batch_norm
 		self.semantic_labels_nbr = semantic_labels_nbr
 		
 		
@@ -318,7 +321,7 @@ class ChainedResPoolBlock(nn.Module) :
 		#print('CHAINED RES : indim1 : {}'.format(indim) )
 		#print('CHAINED RES : k1 : {}'.format(k) )
 		#k=3
-		self.cv1 =  deconv( ind, outd, k, stride=stride, pad=pad, dilation=dilation,batchNorm=False,bias=False)
+		self.cv1 =  deconv( ind, outd, k, stride=stride, pad=pad, dilation=dilation,batchNorm=self.use_batch_norm,bias=False)
 					  
 		# MaxPool :
 		stride = 1
@@ -338,7 +341,7 @@ class ChainedResPoolBlock(nn.Module) :
 		#print('CHAINED RES : indim2 : {}'.format(indim) )
 		#print('CHAINED RES : k2 : {}'.format(k) )
 		#k=3
-		self.cv2 =  deconv( ind, outd, k, stride=stride, pad=pad, dilation=dilation, batchNorm=False,bias=False)
+		self.cv2 =  deconv( ind, outd, k, stride=stride, pad=pad, dilation=dilation, batchNorm=self.use_batch_norm,bias=False)
 					
 		# MaxPool :
 		stride = 1
@@ -358,7 +361,7 @@ class ChainedResPoolBlock(nn.Module) :
 		#print('CHAINED RES : indim3 : {}'.format(indim) )
 		#print('CHAINED RES : k3 : {}'.format(k) )
 		#k=3
-		self.cv3 =  deconv( ind, outd, k, stride=stride, pad=pad, dilation=dilation, batchNorm=False,bias=False)
+		self.cv3 =  deconv( ind, outd, k, stride=stride, pad=pad, dilation=dilation, batchNorm=self.use_batch_norm,bias=False)
 
 		#self.adaptation_cv = deconv( outd, self.semantic_labels_nbr, 1, stride=1,pad=0, batchNorm=False,bias=False)
 					
@@ -434,12 +437,13 @@ class ModelResNet34(models.ResNet) :
 
 
 class RefineNetBlock(nn.Module) :
-	def __init__(self, img_dim_in=512, img_depths=[64,128,256,512], conv_dim=256, use_cuda=True, semantic_labels_nbr=10) :
+	def __init__(self, img_dim_in=512, img_depths=[64,128,256,512], conv_dim=256, use_cuda=True, semantic_labels_nbr=10, use_batch_norm=False) :
 		super(RefineNetBlock,self).__init__()
 		self.img_dim_in = img_dim_in
 		self.img_depths = img_depths
 		self.conv_dim = conv_dim
 		self.use_cuda = use_cuda
+		self.use_batch_norm = use_batch_norm
 
 		self.semantic_labels_nbr = semantic_labels_nbr
 		if self.semantic_labels_nbr is None :
@@ -453,19 +457,19 @@ class RefineNetBlock(nn.Module) :
 			self.img_dims.append( int(self.img_dims[-1]/2) )
 
 		for i in range(self.nbr_paths) :
-			self.RCUpaths.append( ResNetBlock(img_dim=self.img_dims[i], img_depth=self.img_depths[i], conv_dim=self.conv_dim,use_cuda=self.use_cuda) )
+			self.RCUpaths.append( ResNetBlock(img_dim=self.img_dims[i], img_depth=self.img_depths[i], conv_dim=self.conv_dim,use_cuda=self.use_cuda,use_batch_norm=self.use_batch_norm) )
 		print('Creation of the RCUs : OK.')
 		
 
 		# Multi resolution Fusion Block :
 		#print('INPUT MULTI RES : {}'.format(self.img_dims) )
-		self.MultiResFusion = MultiResFusionBlock(img_dim=self.img_dims, img_depth=self.conv_dim,use_cuda=self.use_cuda )
+		self.MultiResFusion = MultiResFusionBlock(img_dim=self.img_dims, img_depth=self.conv_dim,use_cuda=self.use_cuda,use_batch_norm=self.use_batch_norm )
 		print('Creation of the Multi-Resolution Fusion Block : OK.')
 
-		self.ChainedResPool = ChainedResPoolBlock( img_dim=self.img_dims[0], img_depth=self.conv_dim, semantic_labels_nbr=self.semantic_labels_nbr,use_cuda=self.use_cuda)
+		self.ChainedResPool = ChainedResPoolBlock( img_dim=self.img_dims[0], img_depth=self.conv_dim, semantic_labels_nbr=self.semantic_labels_nbr,use_cuda=self.use_cuda,use_batch_norm=self.use_batch_norm )
 		print('Creation of the Chained Residual Pooling Block : OK.')
 
-		self.finalRCU =  ResNetBlock(img_dim=self.img_dims[0], img_depth=self.conv_dim, conv_dim=self.semantic_labels_nbr,use_cuda=self.use_cuda) 
+		self.finalRCU =  ResNetBlock(img_dim=self.img_dims[0], img_depth=self.conv_dim, conv_dim=self.semantic_labels_nbr,use_cuda=self.use_cuda,use_batch_norm=self.use_batch_norm ) 
 		
 	def forward(self,x) :
 		assert(len(x)==self.nbr_paths)
@@ -494,7 +498,7 @@ class RefineNetBlock(nn.Module) :
 
 
 class ResNet34RefineNet1(nn.Module) :
-	def __init__(self, img_dim_in=512, img_depth_in=3, img_depths=[64,128,256,512], conv_dim=256,use_cuda=True, semantic_labels_nbr=10) :
+	def __init__(self, img_dim_in=512, img_depth_in=3, img_depths=[64,128,256,512], conv_dim=256,use_cuda=True, semantic_labels_nbr=10,use_batch_norm=False) :
 		super(ResNet34RefineNet1,self).__init__()
 		self.img_dim_in = img_dim_in
 		self.nbr_paths = len(img_depths)
@@ -502,6 +506,7 @@ class ResNet34RefineNet1(nn.Module) :
 		self.img_depth = img_depth_in
 		self.conv_dim = conv_dim
 		self.use_cuda = use_cuda
+		self.use_batch_norm = use_batch_norm
 		self.semantic_labels_nbr = semantic_labels_nbr
 
 		if self.use_cuda :
@@ -509,7 +514,7 @@ class ResNet34RefineNet1(nn.Module) :
 		else :
 			self.resnet = ModelResNet34()
 		
-		self.refinenet = RefineNetBlock(img_dim_in=self.img_dim_in, img_depths=self.img_depths,conv_dim=self.conv_dim,use_cuda=self.cuda, semantic_labels_nbr=self.semantic_labels_nbr )
+		self.refinenet = RefineNetBlock(img_dim_in=self.img_dim_in, img_depths=self.img_depths,conv_dim=self.conv_dim,use_cuda=self.cuda, semantic_labels_nbr=self.semantic_labels_nbr,use_batch_norm=self.use_batch_norm )
 
 	def forward(self,x) :
 		self.resnet_out = self.resnet(x)
@@ -531,9 +536,10 @@ def test_refinenet() :
 	img_dim = 384
 	conv_dim = 64
 	use_cuda=True
-	batch_size = 2
+	use_batch_norm = True
+	batch_size = 1
 	semantic_labels_nbr = 150
-	refinenet = ResNet34RefineNet1(img_dim_in=img_dim,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr)
+	refinenet = ResNet34RefineNet1(img_dim_in=img_dim,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr,use_batch_norm=use_batch_norm)
 	#print(refinenet)
 	#print(refinenet.refinenet.MultiResFusion)
 
@@ -545,7 +551,7 @@ def test_refinenet() :
 	print(outputs.size())
 
 	elt = 0.0
-	nbr = 100
+	nbr = 10
 	for i in range(nbr) :
 		t =time.time()
 		inputs = Variable(torch.rand((batch_size,3,img_dim,img_dim))).cuda()
