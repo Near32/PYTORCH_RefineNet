@@ -259,8 +259,23 @@ class MultiResFusionBlock(nn.Module) :
 
 			self.paths.append(path)
 
-		
+	def save(self,path) :
+		# Paths :
+		for i in range(len(self.paths)) :
+			i_wts = self.paths[i].state_dict()
+			ipath = path + 'MultiResFusion.path{}.weights'.format(i)
+			torch.save( i_wts, ipath )
+			print('Multi-Resolution Fusion path {} saved at : {}'.format(i,ipath) )
 
+		
+	def load(self,path) :
+		# Paths :
+		for i in range(len(self.paths)) :
+			ipath = path + 'MultiResFusion.path{}.weights'.format(i)
+			self.paths[i].load_state_dict( torch.load( ipath ) )
+			print('Multi-Resolution Fusion path {} loaded from : {}'.format(i,ipath) )
+
+		
 	def __str__(self) :
 		outstr = ''
 		for i in range(len(self.paths) ) :
@@ -368,6 +383,18 @@ class ChainedResPoolBlock(nn.Module) :
 		if self.use_cuda :
 			self = self.cuda()
 
+
+	def save(self,path) :
+		wts = self.state_dict()
+		path = path + 'ChainedResPool.weights'
+		torch.save( wts, path )
+		print('Chained Residual Pooling Block saved at : {}'.format(path) )
+
+	def load(self,path) :
+		path = path + 'ChainedResPool.weights'
+		self.load_state_dict( torch.load( path ) )
+		print('Chained Residual Pooling Block loaded from : {}'.format(path) )
+
 	def forward(self, x) :
 		out = self.relu1(x)
 		
@@ -470,7 +497,40 @@ class RefineNetBlock(nn.Module) :
 		print('Creation of the Chained Residual Pooling Block : OK.')
 
 		self.finalRCU =  ResNetBlock(img_dim=self.img_dims[0], img_depth=self.conv_dim, conv_dim=self.semantic_labels_nbr,use_cuda=self.use_cuda,use_batch_norm=self.use_batch_norm ) 
-		
+	
+	def save(self,path) :
+		# RCU Paths :
+		for i in range(len(self.RCUpaths)) :
+			rcu_i_wts = self.RCUpaths[i].state_dict()
+			rcupath = path + 'RCUPaths{}.weights'.format(i)
+			torch.save( rcu_i_wts, rcupath )
+			print('RCUPath {} saved at : {}'.format(i,rcupath) )
+
+		self.MultiResFusion.save(path)
+		self.ChainedResPool.save(path)
+
+		# Final RCU :
+		frcuwts = self.finalRCU.state_dict()
+		rcupath = path + 'FinalRCUPaths.weights'
+		torch.save( frcuwts, rcupath )
+		print('Final RCUPath saved at : {}'.format(rcupath) )
+
+	def load(self,path) :
+		# RCU Paths :
+		for i in range(len(self.RCUpaths)) :
+			rcupath = path + 'RCUPaths{}.weights'.format(i)
+			self.RCUpaths[i].load_state_dict( torch.load( rcupath ) )
+			print('RCUPath {} loaded from : {}'.format(i,rcupath) )
+
+		self.MultiResFusion.load(path)
+		self.ChainedResPool.load(path)
+
+		# Final RCU :
+		rcupath = path + 'FinalRCUPaths.weights'
+		self.finalRCU.load_state_dict( torch.load( rcupath ) )
+		print('Final RCUPath loaded from : {}'.format(rcupath) )
+
+
 	def forward(self,x) :
 		assert(len(x)==self.nbr_paths)
 
@@ -529,7 +589,23 @@ class ResNet34RefineNet1(nn.Module) :
 
 		return self.refinenet_out
 		
+	def save(self,path) :
+		# RESNET :
+		resnetwts = self.resnet.state_dict()
+		resnetpath = path + 'RESNET.weights'
+		torch.save( resnetwts, resnetpath )
+		print('RESNET saved at : {}'.format(resnetpath) )
 
+		self.refinenet.save(path)
+
+	def load(self,path) :
+		# RESNET :
+		resnetpath = path + 'RESNET.weights'
+		self.resnet.load_state_dict( torch.load( resnetpath ) )
+		print('RESNET loaded from : {}'.format(resnetpath) )
+		
+		self.refinenet.load(path)
+		
 def test_refinenet() :
 	import time
 
@@ -540,8 +616,8 @@ def test_refinenet() :
 	batch_size = 1
 	semantic_labels_nbr = 150
 	refinenet = ResNet34RefineNet1(img_dim_in=img_dim,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr,use_batch_norm=use_batch_norm)
-	#print(refinenet)
-	#print(refinenet.refinenet.MultiResFusion)
+	print(refinenet)
+	print(refinenet.refinenet.MultiResFusion)
 
 	inputs = Variable(torch.rand((batch_size,3,img_dim,img_dim))).cuda()
 	t =time.time()

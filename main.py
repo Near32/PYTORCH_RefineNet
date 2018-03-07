@@ -65,10 +65,18 @@ def setting(args) :
 
 	if frompath :
 		try :
-			refinenet.load_state_dict( torch.load( os.path.join(SAVE_PATH,'weights')) )
+			lp =os.path.join(SAVE_PATH,'best')
+			refinenet.load(path=lp) 
 			print('NET LOADING : OK.')
 		except Exception as e :
 			print('EXCEPTION : NET LOADING : {}'.format(e) )
+			try :
+				lp = os.path.join(SAVE_PATH,'temp')
+				refinenet.load(path=lp) 
+				print('temporary NET LOADING : OK.')
+			except Exception as e :
+				print('EXCEPTION : temporary NET LOADING : {}'.format(e) )
+				
 
 	# OPTIMIZER :
 	optimizer = torch.optim.Adam( refinenet.parameters(), lr=lr)
@@ -187,10 +195,9 @@ def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=
 				ri = torch.cat( [orimg, reconst_images], dim=2)
 				torchvision.utils.save_image(ri,'./data/{}/reconst_images/{}.png'.format(path,(epoch+offset+1) ) )
 				visualize(fixed_sample, reconst_images_or,args,path=SAVE_PATH,epoch=epoch+offset+1)
-				model_wts = refinenet.state_dict()
-				torch.save( model_wts, os.path.join(SAVE_PATH,'temp.weights') )
-				print('Model saved at : {}'.format(os.path.join(SAVE_PATH,'temp.weights')) )
-
+				lp = os.path.join(SAVE_PATH,'temp')
+				refinenet.save(path=lp) 
+			
 			#images = Variable( (images.view(-1, img_depth,img_dim, img_dim) ), volatile=False )#.float()
 			images = Variable( images, volatile=False )#.float()
 			labels = Variable( labels, volatile=False )#.float()
@@ -227,17 +234,16 @@ def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=
 
 		if best_loss is None :
 			#first validation : let us set the initialization but not save it :
+			best_loss = epoch_loss		
+		
+		if epoch_loss < best_loss:
 			best_loss = epoch_loss
-			best_model_wts = refinenet.state_dict()
-			# save best model weights :
-			torch.save( best_model_wts, os.path.join(SAVE_PATH,'weights') )
-			print('Model saved at : {}'.format(os.path.join(SAVE_PATH,'weights')) )
-		elif epoch_loss < best_loss:
-			best_loss = epoch_loss
-			best_model_wts = refinenet.state_dict()
-			# save best model weights :
-			torch.save( best_model_wts, os.path.join(SAVE_PATH,'weights') )
-			print('Model saved at : {}'.format(os.path.join(SAVE_PATH,'weights')) )
+			lp = os.path.join(SAVE_PATH,'best')
+			refinenet.save(path=lp)
+
+		lp = os.path.join(SAVE_PATH,'temp')
+		refinenet.save(path=lp)
+
 
 
 
