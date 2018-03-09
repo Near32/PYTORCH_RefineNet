@@ -79,7 +79,8 @@ def setting(args) :
 				
 
 	# OPTIMIZER :
-	optimizer = torch.optim.Adam( refinenet.parameters(), lr=lr)
+	#optimizer = torch.optim.Adam( refinenet.parameters(), lr=lr)
+	optimizer = torch.optim.Adagrad( refinenet.parameters(), lr=lr)
 	
 	if args.train :
 		train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=args.epoch,batch_size=args.batch,offset=args.offset)
@@ -229,7 +230,7 @@ def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=
 			           %(epoch+1, nbr_epoch, i+1, iter_per_epoch, total_loss.data[0], 
 			             reconst_loss.data[0]) )
 			    if best_loss is not None :
-			    	print("Epoch Loss : %.4f / Best : %.4f".format(epoch_loss, best_loss))
+			    	print("Epoch Loss : {} / Best : {}".format(epoch_loss, best_loss))
 
 
 		if best_loss is None :

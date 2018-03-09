@@ -605,12 +605,19 @@ class ResNet34RefineNet1(nn.Module) :
 		print('RESNET loaded from : {}'.format(resnetpath) )
 		
 		self.refinenet.load(path)
+
+	def getParameters(self) :
+		parameters = self.parameters()
+		print(parameters) 
+
+		return parameters
+
 		
 def test_refinenet() :
 	import time
 
-	img_dim = 384
-	conv_dim = 64
+	img_dim = 128
+	conv_dim = 4
 	use_cuda=True
 	use_batch_norm = True
 	batch_size = 1
@@ -618,6 +625,9 @@ def test_refinenet() :
 	refinenet = ResNet34RefineNet1(img_dim_in=img_dim,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr,use_batch_norm=use_batch_norm)
 	print(refinenet)
 	print(refinenet.refinenet.MultiResFusion)
+
+	refinenet.getParameters()
+	raise
 
 	inputs = Variable(torch.rand((batch_size,3,img_dim,img_dim))).cuda()
 	t =time.time()
