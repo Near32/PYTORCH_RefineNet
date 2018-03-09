@@ -54,7 +54,7 @@ def setting(args) :
 	path = 'SceneParsing--img{}-lr{}-conv{}'.format(img_dim,lr,conv_dim)
 	if args.use_batch_norm :
 		path += '-batch_norm'
-		
+
 	if not os.path.exists( './data/{}/'.format(path) ) :
 		os.mkdir('./data/{}/'.format(path))
 	if not os.path.exists( './data/{}/reconst_images/'.format(path) ) :
@@ -222,7 +222,7 @@ def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=
 			           %(epoch+1, nbr_epoch, i+1, iter_per_epoch, total_loss.data[0], 
 			             reconst_loss.data[0]) )
 			    if best_loss is not None :
-			    	print("Epoch Loss : %.4f / Best : %.4f".format(epoch_loss, best_loss))
+			    	print("Epoch Loss : {} / Best : {}".format(epoch_loss, best_loss))
 
 
 		if best_loss is None :
