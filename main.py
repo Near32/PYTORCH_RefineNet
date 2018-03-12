@@ -260,12 +260,20 @@ if __name__ == '__main__' :
 	parser.add_argument('--epoch', type=int, default=100)
 	parser.add_argument('--lr', type=float, default=1e-4)
 	parser.add_argument('--conv_dim', type=int, default=64)
-	parser.add_argument('--data', type=str, default='ADE20K')
+	#parser.add_argument('--data', type=str, default='ADE20K')
+	parser.add_argument('--data', type=str, default='CamVid')
 	parser.add_argument('--use_batch_norm', action='store_true', default=False)
+	'''
 	parser.add_argument('--list_train', type=str, default='./SceneParsing/ADE20K_object150_train.txt')
 	parser.add_argument('--list_val', type=str, default='./SceneParsing/ADE20K_object150_val.txt')
 	parser.add_argument('--root_img', type=str, default='./SceneParsing/images')
 	parser.add_argument('--root_seg', type=str, default='./SceneParsing/annotations')
+	'''
+	parser.add_argument('--list_train', type=str, default='./CamVid/CamVid_train.txt')
+	parser.add_argument('--list_val', type=str, default='./CamVid/CamVid_val.txt')
+	parser.add_argument('--root_img', type=str, default='./CamVid/images')
+	parser.add_argument('--root_seg', type=str, default='./CamVid/annotations')
+	
 	parser.add_argument('--imgSize', default=384, type=int,help='input image size')
 	parser.add_argument('--segSize', default=96, type=int,help='output image size')
 
