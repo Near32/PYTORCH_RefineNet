@@ -8,11 +8,18 @@ This repository is an attempt at replicating some results presented in Guosheng 
 
 The dataset can be downloaded here : 
 
-* ["Train/Val"](http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip)
-* ["Test"](http://data.csail.mit.edu/places/ADEchallenge/release_test.zip)
+* [Train/Val](http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip)
+* [Test](http://data.csail.mit.edu/places/ADEchallenge/release_test.zip)
+
+### ["CamVid Database"](http://mi.eng.cam.ac.uk/research/projects/VideoRec/CamVid/) :
+
+The dataset can be downloaded here : 
+
+* [Train/Val](http://mi.eng.cam.ac.uk/research/projects/VideoRec/CamVid/data/LabeledApproved_full.zip)
 
 ## Experiments :
 
+### ["MIT Sccene Parsing Benchmark"](http://sceneparsing.csail.mit.edu/) :
 Here are some early results :
 
 * Left : input picture

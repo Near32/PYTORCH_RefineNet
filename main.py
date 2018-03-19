@@ -17,22 +17,25 @@ from PIL import Image
 
 
 from models import ResNet34RefineNet1
-from dataset import load_dataset_ADE20K
+from dataset import load_dataset_ADE20K, load_dataset
 
 use_cuda = True
-
+colors = None 
 
 def setting(args) :
-	data = args.data
+	data = args['data']
 
-	size = args.imgSize
-	batch_size = args.batch
-	lr = args.lr
-	epoch = args.epoch
+	size = args['imgSize']
+	batch_size = args['batch']
+	lr = args['lr']
+	epoch = args['epoch']
 	
 	if 'ADE20K' in data :
 		dataset = load_dataset_ADE20K(args,img_dim=size) 
-	
+	elif 'CamVid' in data :
+		dataset = load_dataset(args,img_dim=size,data=args['data'])
+		colors = dataset.ilabel2color
+
 	# Data loader
 	data_loader = torch.utils.data.DataLoader(dataset=dataset,
     	                                      batch_size=batch_size, 
@@ -42,17 +45,17 @@ def setting(args) :
 	img_dim = size
 	img_depth = 3
 	#img_depths=[int(img_dim/8),int(img_dim/4),int(img_dim/2),int(img_dim)]
-	conv_dim = args.conv_dim
+	conv_dim = args['conv_dim']
 	global use_cuda
 	batch_size = 8
 	semantic_labels_nbr = 150
-	refinenet = ResNet34RefineNet1(img_dim_in=img_dim, img_depth_in=img_depth,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr,use_batch_norm=args.use_batch_norm)
+	refinenet = ResNet34RefineNet1(img_dim_in=img_dim, img_depth_in=img_depth,conv_dim=conv_dim,use_cuda=use_cuda,semantic_labels_nbr=semantic_labels_nbr,use_batch_norm=args['use_batch_norm'])
 	frompath = True
 	print(refinenet)
 		
 	# LOADING :
 	path = 'SceneParsing--img{}-lr{}-conv{}'.format(img_dim,lr,conv_dim)
-	if args.use_batch_norm :
+	if args['use_batch_norm'] :
 		path += '-batch_norm'
 
 	if not os.path.exists( './data/{}/'.format(path) ) :
@@ -82,8 +85,8 @@ def setting(args) :
 	#optimizer = torch.optim.Adam( refinenet.parameters(), lr=lr)
 	optimizer = torch.optim.Adagrad( refinenet.parameters(), lr=lr)
 	
-	if args.train :
-		train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=args.epoch,batch_size=args.batch,offset=args.offset)
+	if args['train'] :
+		train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=args['epoch'],batch_size=args['batch'],offset=args['offset'])
 	
 
 def visualize_reconst_label(reconst,semantic_labels_nbr=150) :
@@ -123,40 +126,43 @@ def colorEncode(labelmap, colors):
     
     return labelmap_rgb
 
-def visualize(batch_data, pred, args,path,epoch=0):
-    colors = loadmat('./color150.mat')['colors']
-    imgs = batch_data['image']
-    segs = batch_data['label']
-    infos = batch_data['info']
+def visualize(batch_data, pred, args,path,epoch=0,colors=None):
+	if colors is None :
+		colors = loadmat('./color150.mat')['colors']
 
-    for j in range(len(infos)):
-        img = imgs[j].clone()
-        for t,m,s in zip(img, [0.229, 0.224, 0.225], [0.485, 0.456, 0.406]) :
-        	t.mul_(m).add_(s)
-        img = (img.numpy().transpose((1, 2, 0)) * 255).astype(np.uint8)
-        img = imresize(img, (args.imgSize, args.imgSize),interp='bilinear')
+	imgs = batch_data['image']
+	segs = batch_data['label']
+	infos = batch_data['info']
 
-        # segmentation
-        lab = segs[j].numpy()
-        lab_color = colorEncode(lab, colors)
-        lab_color = imresize(lab_color, (args.imgSize, args.imgSize),interp='nearest')
+	for j in range(len(infos)):
+	    img = imgs[j].clone()
+	    for t,m,s in zip(img, [0.229, 0.224, 0.225], [0.485, 0.456, 0.406]) :
+	    	t.mul_(m).add_(s)
+	    img = (img.numpy().transpose((1, 2, 0)) * 255).astype(np.uint8)
+	    img = imresize(img, (args['imgSize'], args['imgSize']),interp='bilinear')
 
-        # prediction
-        pred_ = np.argmax(pred.data.cpu()[j].numpy(), axis=0)
-        pred_color = colorEncode(pred_, colors)
-        pred_color = imresize(pred_color, (args.imgSize, args.imgSize),interp='nearest')
+	    # segmentation
+	    lab = segs[j].numpy()
+	    lab_color = colorEncode(lab, colors)
+	    lab_color = imresize(lab_color, (args['imgSize'], args['imgSize']),interp='nearest')
 
-        # aggregate images and save
-        im_vis = np.concatenate((img, lab_color, pred_color),axis=1).astype(np.uint8)
-        imsave(os.path.join( path,'{}-{}'.format(epoch,infos[j].replace('/', '_').replace('.jpg', '.png')) ), im_vis)
+	    # prediction
+	    pred_ = np.argmax(pred.data.cpu()[j].numpy(), axis=0)
+	    pred_color = colorEncode(pred_, colors)
+	    pred_color = imresize(pred_color, (args['imgSize'], args['imgSize']),interp='nearest')
+
+	    # aggregate images and save
+	    im_vis = np.concatenate((img, lab_color, pred_color),axis=1).astype(np.uint8)
+	    imsave(os.path.join( path,'{}-{}'.format(epoch,infos[j].replace('/', '_').replace('.jpg', '.png')) ), im_vis)
 
 
 def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=100,batch_size=32, offset=0, stacking=False) :
 	global use_cuda
-	
+	global colors 
+
 	img_depth=refinenet.img_depth
 	pred_depth = refinenet.semantic_labels_nbr
-	pred_dim = args.segSize
+	pred_dim = args['segSize']
 	img_dim = refinenet.img_dim_in
 
 	data_iter = iter(data_loader)
@@ -195,7 +201,7 @@ def train_model(refinenet,data_loader, optimizer, SAVE_PATH,path,args,nbr_epoch=
 				orimg = fixed_seg_norm.view(-1, 1, pred_dim, pred_dim)
 				ri = torch.cat( [orimg, reconst_images], dim=2)
 				torchvision.utils.save_image(ri,'./data/{}/reconst_images/{}.png'.format(path,(epoch+offset+1) ) )
-				visualize(fixed_sample, reconst_images_or,args,path=SAVE_PATH,epoch=epoch+offset+1)
+				visualize(fixed_sample, reconst_images_or,args,path=SAVE_PATH,epoch=epoch+offset+1,colors=colors)
 				lp = os.path.join(SAVE_PATH,'temp')
 				refinenet.save(path=lp) 
 			
@@ -277,7 +283,14 @@ if __name__ == '__main__' :
 	parser.add_argument('--imgSize', default=384, type=int,help='input image size')
 	parser.add_argument('--segSize', default=96, type=int,help='output image size')
 
-	args = parser.parse_args()
+	args = vars(parser.parse_args())
+	
+	if 'ADE20K' in args['data'] :
+		args['list_train'] = './SceneParsing/ADE20K_object150_train.txt'
+		args['list_val'] = './SceneParsing/ADE20K_object150_val.txt'
+		args['root_img'] = './SceneParsing/images'
+		args['root_seg'] = './SceneParsing/annotations'
+	
 	print(args)
 
 	setting(args)
